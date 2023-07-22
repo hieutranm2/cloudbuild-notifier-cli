@@ -1,0 +1,10 @@
+steps:
+  - name: "node:$_NODE_VERSION"
+    entrypoint: "npm"
+    args: ["install"]
+  - name: "node:$_NODE_VERSION"
+    entrypoint: "npm"
+    args: ["run", "test"]
+substitutions:
+    _NODE_VERSION: "18"
+  
