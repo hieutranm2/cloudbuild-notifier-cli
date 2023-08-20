@@ -1,15 +1,20 @@
+import { PubSub } from '@google-cloud/pubsub'
 import { v3 as ResourceManagerV3 } from '@google-cloud/resource-manager'
-import { v2 as CloudRunV2 } from '@google-cloud/run'
+import { v2 as CloudRunV2, protos as RunProtos } from '@google-cloud/run'
 import { v1 as SecretManagerV1 } from '@google-cloud/secret-manager'
 import { v1 as ServiceUsageV1 } from '@google-cloud/service-usage'
 import { Storage } from '@google-cloud/storage'
+import { confirm, input, select } from '@inquirer/prompts'
 import { Command } from 'commander'
-import { iam_v1 } from 'googleapis'
+import { google } from 'googleapis'
 import nunjucks from 'nunjucks'
 import yaml from 'yaml'
+import { CloudRunService } from '../services/cloud-run'
 import CloudStorageService from '../services/cloud-storage'
+import { IAMService } from '../services/iam'
 import logger from '../services/logger'
 import ProjectManagerService from '../services/project-manager'
+import { PubSubService } from '../services/pubsub'
 import SecretManagerService from '../services/secret-manager'
 import ServiceUsageService from '../services/service-usage'
 import notifierConfigTmpl from '../template/notifier-config'
@@ -22,19 +27,19 @@ type SetupCommandOpts = {
   name: string
   region: string
   serviceAccountKey: string
-  notiferImage: string
+  notifierImage: string
   projectNumber: string
   secretName: string
+  nonInteractive: boolean
 }
+
+const INVOKER_SA_ID = 'cloud-run-pubsub-invoker'
 
 const command = new Command('setup')
   .description('Set up the notifier')
-  .requiredOption('-p, --project, --projectId <project_id>', 'The id of your GCP project')
-  .requiredOption(
-    '-wu, --slack-webhook-url <url>',
-    'The Slack Incoming Webhook url to post messages'
-  )
-  .requiredOption('-gu, --github-user-name <name>', 'The name of the user to use for git')
+  .option('-p, --projectId <project_id>', 'The id of your GCP project')
+  .option('-wu, --slack-webhook-url <url>', 'The Slack Incoming Webhook url to post messages')
+  .option('-gu, --github-user-name <name>', 'The name of the user to use for git')
   .option('-n, --name <name>', 'The name of notifier', 'cloud-build-notifier')
   .option('-r, --region <region>', 'The region to deploy the notifier to', 'us-east1')
   .option(
@@ -47,44 +52,150 @@ const command = new Command('setup')
     'The Docker image to use for the notifier',
     'us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/slack:latest'
   )
+  .option('--non-interactive', 'Run in non-interactive mode')
   .action(async (options) => {
-    // Step 0: Validate options
-    validateOptions(options)
+    if (options.nonInteractive) {
+      // Step 0: Validate command options
+      validateOptions(options)
+    }
     // Step 1: Serialize command options
     await serializeCommandOptions(options)
     // Step 2: Enable required APIs
-    // Service Account must have Service Usage Admin role
-    // await enableRequiredApis(options)
+    await enableRequiredApis(options)
     // Step 3: Store Slack webhook url in Secret Manager
-    // Service Account must have Secret Manager Admin role
-    // await storeSlackWebhookUrl(options)
+    await storeSlackWebhookUrl(options)
     // Step 4: Upload notifier config files to Cloud Storage
     const configPath = await uploadNotifierConfig(options)
     // Step 5: Deploy notifier to Cloud Run
-    await deployNotifierService(options, configPath!)
-    // Step 6: Create Cloud Build trigger to deploy notifier on push to master
+    const service = await deployNotifierService(options, configPath!)
+    // Step 6: Create service account for Cloud Build and grant permissions
+    await grantPermissions(service!, options)
+    // Step 7: Create Pub/Sub topic and subscription
+    await createPubSub(service!, options)
+    // Step 8: Notify setup completion
+    logger.info('** NOTIFIER SETUP COMPLETE **')
   })
 
-const validateOptions = async (opts: any) => {
+const validateOptions = async (opts: SetupCommandOpts) => {
   logger.info('Validating command options...')
-  logger.info('Finished validating command options...')
+  const definedOpts = command.options
+  const { githubUserName, projectId, slackWebhookUrl } = opts
+  if (!projectId) {
+    const flags = definedOpts.find((opt) => opt.long === '--project')?.flags
+    logger.error(`required option "${flags}" not specified`)
+  }
+
+  if (!slackWebhookUrl) {
+    const flags = definedOpts.find((opt) => opt.long === '--slack-webhook-url')?.flags
+    logger.error(`required option "${flags}" not specified`)
+  } else if (!isSlackWebhookUrl(slackWebhookUrl)) {
+    logger.error('Slack webhook url is invalid')
+  }
+
+  if (!githubUserName) {
+    const flags = definedOpts.find((opt) => opt.long === '--github-user-name')?.flags
+    logger.error(`required option "${flags}" not specified`)
+  }
+
+  if (!githubUserName) {
+    const flags = definedOpts.find((opt) => opt.long === '--github-user-name')?.flags
+    logger.error(`required option "${flags}" not specified`)
+  }
+
+  logger.info('Finished validating command options')
 }
 
 const serializeCommandOptions = async (opts: SetupCommandOpts) => {
-  logger.info('Serializing command options...')
-  const { projectId, serviceAccountKey } = opts
-  const project = await new ProjectManagerService(
-    new ResourceManagerV3.ProjectsClient(
-      serviceAccountKey
-        ? {
-            keyFilename: serviceAccountKey,
-          }
-        : {}
-    )
-  ).getProject(projectId)
-  opts.projectNumber = project?.name?.split('/')[1] as string
+  const { nonInteractive, serviceAccountKey, name, projectId } = opts
+  const projectManager = await new ProjectManagerService(
+    new ResourceManagerV3.ProjectsClient({
+      projectId,
+      keyFilename: serviceAccountKey,
+    })
+  )
+  if (nonInteractive) {
+    logger.info('Serializing command options...')
+    const project = await projectManager.getProject(opts.projectId)
+    opts.projectNumber = project?.name?.split('/')[1] as string
+    logger.info('Finished serializing command options')
+  } else {
+    let selectedProject
+    if (!opts.projectId) {
+      const projectsList = await projectManager.getActiveProjects()
+      const projectChoices = projectsList.map((p) => ({
+        value: p,
+        name: p.displayName!,
+      }))
+      selectedProject = await select({
+        message: 'Select a GCP project:',
+        choices: projectChoices,
+      })
+      opts.projectId = selectedProject?.projectId as string
+    } else {
+      selectedProject = await projectManager.getProject(opts.projectId)
+    }
+    opts.projectNumber = selectedProject?.name?.split('/')[1] as string
+
+    const region = await input({
+      message: 'Enter a region to deploy the notifier to:',
+      default: opts.region,
+    })
+    opts.region = region
+
+    const notifierName = await input({
+      message: 'Enter a name for the notifier:',
+      default: name,
+    })
+    opts.name = notifierName
+
+    const githubUserName = await input({
+      message: 'Enter your GitHub user name/organization name:',
+      validate(value) {
+        if (!value) {
+          return 'Please enter your GitHub user name/organization name'
+        }
+        return true
+      },
+    })
+    opts.githubUserName = githubUserName
+
+    const slackWebhookUrl = await input({
+      message: 'Enter your Slack Incoming Webhook url:',
+      validate(value) {
+        if (!value) {
+          return 'Please enter your Slack Incoming Webhook url'
+        }
+        // validate slack url
+        if (!isSlackWebhookUrl(value)) {
+          return 'Invalid Slack Incoming Webhook url'
+        }
+        return true
+      },
+    })
+    opts.slackWebhookUrl = slackWebhookUrl
+
+    const notifierImage = await input({
+      message: 'Enter the Docker image to use for the notifier:',
+      default: opts.notifierImage,
+    })
+    opts.notifierImage = notifierImage
+
+    const isConfirm = await confirm({
+      message: 'Are you sure you want to proceed?',
+      default: false,
+    })
+    if (!isConfirm) {
+      process.exit(0)
+    }
+  }
   opts.secretName = opts.name + '-slack-webhook'
-  logger.info('Finished serializing command options')
+}
+
+const isSlackWebhookUrl = (url: string) => {
+  const slackWebhookUrlRegex = new RegExp(
+    'https://hooks.slack.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+'
+  )
+  return slackWebhookUrlRegex.test(url)
 }
 
 const enableRequiredApis = async (opts: SetupCommandOpts) => {
@@ -99,13 +210,10 @@ const enableRequiredApis = async (opts: SetupCommandOpts) => {
       'cloudresourcemanager.googleapis.com',
     ]
     const serviceUsage = new ServiceUsageService(
-      new ServiceUsageV1.ServiceUsageClient(
-        serviceAccountKey
-          ? {
-              keyFilename: serviceAccountKey,
-            }
-          : {}
-      )
+      new ServiceUsageV1.ServiceUsageClient({
+        projectId,
+        keyFilename: serviceAccountKey,
+      })
     )
     const enabledServices = await serviceUsage.listEnabledServices(
       `projects/${projectId}` as string
@@ -129,20 +237,17 @@ const storeSlackWebhookUrl = async (opts: SetupCommandOpts) => {
   try {
     const { projectId, projectNumber, slackWebhookUrl, serviceAccountKey, secretName } = opts
     const secretManager = new SecretManagerService(
-      new SecretManagerV1.SecretManagerServiceClient(
-        serviceAccountKey
-          ? {
-              keyFilename: serviceAccountKey,
-            }
-          : {}
-      )
+      new SecretManagerV1.SecretManagerServiceClient({
+        projectId,
+        keyFilename: serviceAccountKey,
+      })
     )
     logger.info(`Storing Slack webhook in Secret Manager...`)
     const secret = await secretManager.createSecret(`projects/${projectId}` as string, secretName)
-    await secretManager.addSecretVersion(secretName, slackWebhookUrl)
+    await secretManager.addSecretVersion(secret?.name!, slackWebhookUrl)
     logger.info(`Finished storing Slack webhook in Secret Manager`)
     logger.info(`Granting Compute Engine default service account access to secret...`)
-    await secretManager.grantAccess(secretName, [
+    await secretManager.grantAccess(secret?.name!, [
       `serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`,
     ])
     logger.info(`Finished granting Compute Engine default service account access to secret`)
@@ -155,15 +260,18 @@ const uploadNotifierConfig = async (opts: SetupCommandOpts) => {
   try {
     const { projectId, serviceAccountKey, githubUserName, name, secretName, projectNumber } = opts
     const storageService = new CloudStorageService(
-      new Storage(serviceAccountKey ? { keyFilename: serviceAccountKey } : {})
+      new Storage({
+        projectId,
+        keyFilename: serviceAccountKey,
+      })
     )
     nunjucks.configure({ autoescape: true })
 
     // create notifier bucket
     logger.info('Creating notifier bucket...')
-    const BUCKET_NAME = `${projectId}-notifiers-config`
+    const BUCKET_NAME = `${projectId}-${name}-config`
     const bucket = await storageService.createBucket(BUCKET_NAME)
-    await storageService.addBucketIamMember(bucket!, 'roles/storage.objectViewer', [
+    await storageService.addBucketIamMember(BUCKET_NAME, 'roles/storage.objectViewer', [
       `serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`,
     ])
     logger.info(`Finished creating notifier bucket ${bucket?.name}`)
@@ -204,81 +312,106 @@ const uploadNotifierConfig = async (opts: SetupCommandOpts) => {
 }
 
 const deployNotifierService = async (opts: SetupCommandOpts, configPath: string) => {
-  const { projectId, region, serviceAccountKey, notiferImage, name } = opts
-  const cloudRunClient = new CloudRunV2.ServicesClient({
-    projectId,
-    credentials: serviceAccountKey ? JSON.parse(serviceAccountKey) : undefined,
-  })
-  const [operation] = await cloudRunClient.createService({
-    parent: `projects/${projectId}/locations/${region}`,
-    serviceId: name,
-    service: {
+  try {
+    logger.info('Deploying notifier service...')
+    const { projectId, region, serviceAccountKey, notifierImage, name } = opts
+    const runService = new CloudRunService(
+      new CloudRunV2.ServicesClient({
+        projectId,
+        keyFile: serviceAccountKey,
+      })
+    )
+    const service = await runService.createOrUpdateServiceWithDocker(
+      `projects/${projectId}/locations/${region}`,
       name,
-      template: {
-        containers: [
+      {
+        image: notifierImage,
+        env: [
           {
-            image: notiferImage,
-            env: [
-              {
-                name: 'CONFIG_PATH',
-                value: configPath,
-              },
-              {
-                name: 'PROJECT_ID',
-                value: projectId,
-              },
-            ],
+            name: 'CONFIG_PATH',
+            value: configPath,
+          },
+          {
+            name: 'PROJECT_ID',
+            value: projectId,
           },
         ],
-      },
-    },
-  })
-  const [service] = await operation.promise()
-  return service.name
+      }
+    )
+    logger.info('Finished deploying notifier service')
+    return service
+  } catch (error) {
+    console.log(error.metadata.internalRepr)
+    logger.error(error)
+  }
 }
 
-const grantPermissions = async (opts: SetupCommandOpts) => {
-  const { projectId, serviceAccountKey, projectNumber, name, region } = opts
-  const projectManagerService = new ProjectManagerService(
-    new ResourceManagerV3.ProjectsClient(
-      serviceAccountKey
-        ? {
-            keyFilename: serviceAccountKey,
-          }
-        : {}
+const grantPermissions = async (
+  service: RunProtos.google.cloud.run.v2.IService,
+  opts: SetupCommandOpts
+) => {
+  try {
+    logger.info('Setting up IAM...')
+    const { projectId, serviceAccountKey, projectNumber } = opts
+    // Grant Pub/Sub permissions to create authentication tokens in your project:
+    const projectManagerService = new ProjectManagerService(
+      new ResourceManagerV3.ProjectsClient({
+        projectId,
+        keyFilename: serviceAccountKey,
+      })
     )
-  )
-  await projectManagerService.grantRole(projectId, [
-    {
-      members: [`serviceAccount:service-${projectNumber}@gcp-sa-pubsub.iam.gserviceaccount.com`],
-      role: 'roles/iam.serviceAccountTokenCreator',
-    },
-  ])
-  const iam = new iam_v1.Iam(serviceAccountKey ? { key: serviceAccountKey } : {})
-  await iam.projects.serviceAccounts.create({
-    name: `projects/${projectId}`,
-    requestBody: {
-      accountId: `cloud-run-pubsub-invoker`,
-      serviceAccount: {
-        displayName: `Cloud Run Pub/Sub Invoker`,
+    await projectManagerService.addIamPolicyBindings(projectId, [
+      {
+        members: [`serviceAccount:service-${projectNumber}@gcp-sa-pubsub.iam.gserviceaccount.com`],
+        role: 'roles/iam.serviceAccountTokenCreator',
       },
-    },
-  })
-  const cloudRunClient = new CloudRunV2.ServicesClient({
-    projectId,
-    credentials: serviceAccountKey ? JSON.parse(serviceAccountKey) : undefined,
-  })
-  cloudRunClient.setIamPolicy({
-    resource: `projects/${projectId}/locations/${region}/services/${name}`,
-    policy: {
-      bindings: [
-        {
-          members: [`serviceAccount:cloud-run-pubsub-invoker@${projectId}.iam.gserviceaccount.com`],
-          role: 'roles/run.invoker',
+    ])
+    // Create a service account to represent your Pub/Sub subscription identity:
+    const iamService = new IAMService(google.iam('v1'))
+    await iamService.createServiceAccount(projectId, INVOKER_SA_ID, `Cloud Run Pub/Sub Invoker`)
+    // Give the invoker service account the Cloud Run Invoker permission:
+    const cloudRunClient = new CloudRunV2.ServicesClient({
+      projectId,
+      keyFile: serviceAccountKey,
+    })
+    const runService = new CloudRunService(cloudRunClient)
+    await runService.addIamPolicyBinding(service.name!, 'roles/run.invoker', [
+      `serviceAccount:${INVOKER_SA_ID}@${projectId}.iam.gserviceaccount.com`,
+    ])
+    logger.info('Finished setting up IAM')
+  } catch (error) {
+    console.log(error)
+    logger.error(error)
+  }
+}
+
+const createPubSub = async (
+  service: RunProtos.google.cloud.run.v2.IService,
+  opts: SetupCommandOpts
+) => {
+  try {
+    logger.info('Creating Pub/Sub topic and subscription...')
+    const { projectId, serviceAccountKey, name } = opts
+    const pubsubService = new PubSubService(
+      new PubSub({
+        projectId,
+        keyFile: serviceAccountKey,
+      })
+    )
+    const topic = await pubsubService.createTopic('cloud-builds')
+    const subscriberId = name + '-subscription'
+    await pubsubService.createSubscription(topic, subscriberId, {
+      pushConfig: {
+        pushEndpoint: service.uri!,
+        oidcToken: {
+          serviceAccountEmail: `${INVOKER_SA_ID}@${projectId}.iam.gserviceaccount.com`,
         },
-      ],
-    },
-  })
+      },
+    })
+    logger.info('Finished creating Pub/Sub topic and subscription...')
+  } catch (error) {
+    logger.error(error)
+  }
 }
 
 export default command

@@ -17,9 +17,13 @@ export default class CloudStorageService {
     }
   }
 
-  async addBucketIamMember(bucket: Bucket, role: string, members: string[]) {
+  async addBucketIamMember(bucketName: string, role: string, members: string[]) {
     try {
-      const [policy] = await bucket.iam.getPolicy({ requestedPolicyVersion: 3 })
+      const bucket = this.storage.bucket(bucketName)
+      const [policy] = await bucket.iam.getPolicy({
+        requestedPolicyVersion: 3,
+        userProject: bucket.projectId,
+      })
       policy.bindings.push({
         role,
         members,

@@ -15,15 +15,28 @@ export default class ProjectManagerService {
     }
   }
 
-  async grantRole(projectId: string, bindings: protos.google.iam.v1.IBinding[]) {
+  async getActiveProjects() {
+    const [projects] = await this.client.searchProjects({
+      query: 'state:ACTIVE',
+    })
+    return projects
+  }
+
+  async addIamPolicyBindings(projectId: string, bindings: protos.google.iam.v1.IBinding[]) {
     try {
-      this.client.setIamPolicy({
+      const [policy] = await this.client.getIamPolicy({
         resource: `projects/${projectId}`,
-        policy: {
-          bindings: bindings,
+        options: {
+          requestedPolicyVersion: 3,
         },
       })
+      policy.bindings = policy.bindings?.concat(bindings) || bindings
+      return this.client.setIamPolicy({
+        resource: `projects/${projectId}`,
+        policy,
+      })
     } catch (error) {
+      console.log(error)
       logger.error(error)
     }
   }

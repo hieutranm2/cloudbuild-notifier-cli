@@ -8,7 +8,7 @@ const logger = {
     console.info(clr.blue(clr.bold('INFO')), message)
   },
   error: (error: any) => {
-    console.error(clr.red(clr.bold('ERROR')), error.message)
+    console.error(clr.red(clr.bold('ERROR')), typeof error === 'string' ? error : error.message)
     process.exit(1)
   },
   warn: (message: string) => {

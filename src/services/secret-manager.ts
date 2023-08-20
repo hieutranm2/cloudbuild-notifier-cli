@@ -11,7 +11,6 @@ export default class SecretManagerService {
         filter: `name:${name}`,
       })
       if (secrets.length > 0) {
-        logger.info(`Secret ${name} already exists`)
         return secrets[0]
       }
       const [secret] = await this.client.createSecret({
