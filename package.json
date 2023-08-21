@@ -1,6 +1,6 @@
 {
   "name": "cloudbuild-notifier",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A CLI helps set up Cloud Build notification to Slack",
   "author": "Hieu Tran",
   "license": "ISC",
