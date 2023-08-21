@@ -29,6 +29,13 @@ export default class SecretManagerService {
     }
   }
 
+  async deleteSecret(name: string) {
+    await this.client.deleteSecret({
+      name,
+    })
+    return true
+  }
+
   async addSecretVersion(name: string, payload: string) {
     try {
       const [version] = await this.client.addSecretVersion({

@@ -9,6 +9,7 @@ import { Command } from 'commander'
 import { google } from 'googleapis'
 import nunjucks from 'nunjucks'
 import yaml from 'yaml'
+import { INVOKER_SA_ID } from '../constants'
 import { CloudRunService } from '../services/cloud-run'
 import CloudStorageService from '../services/cloud-storage'
 import { IAMService } from '../services/iam'
@@ -32,8 +33,6 @@ type SetupCommandOpts = {
   secretName: string
   nonInteractive: boolean
 }
-
-const INVOKER_SA_ID = 'cloud-run-pubsub-invoker'
 
 const command = new Command('setup')
   .description('Set up the notifier')
@@ -145,6 +144,15 @@ const serializeCommandOptions = async (opts: SetupCommandOpts) => {
     const notifierName = await input({
       message: 'Enter a name for the notifier:',
       default: name,
+      validate(value) {
+        if (!value) {
+          return 'Please enter a name for the notifier'
+        }
+        if (!isValidNotifierName(value)) {
+          return 'Notifier name must start with a lowercase letter followed by up to 63 lowercase letters, numbers, or hyphens, and cannot end with a hyphen'
+        }
+        return true
+      },
     })
     opts.name = notifierName
 
@@ -196,6 +204,11 @@ const isSlackWebhookUrl = (url: string) => {
     'https://hooks.slack.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+'
   )
   return slackWebhookUrlRegex.test(url)
+}
+
+const isValidNotifierName = (name: string) => {
+  const notifierNameRegex = new RegExp('^[a-z][a-z0-9-]{0,61}[a-z0-9]$')
+  return notifierNameRegex.test(name)
 }
 
 const enableRequiredApis = async (opts: SetupCommandOpts) => {

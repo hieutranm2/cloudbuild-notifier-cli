@@ -17,6 +17,17 @@ export default class CloudStorageService {
     }
   }
 
+  async deleteBucket(bucketName: string) {
+    const bucket = this.storage.bucket(bucketName)
+    const [files] = await bucket.getFiles()
+    await Promise.all(
+      files.map((file) => {
+        return file.delete()
+      })
+    )
+    await this.storage.bucket(bucketName).delete()
+  }
+
   async addBucketIamMember(bucketName: string, role: string, members: string[]) {
     try {
       const bucket = this.storage.bucket(bucketName)

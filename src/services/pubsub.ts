@@ -13,6 +13,15 @@ export class PubSubService {
     return newTopic
   }
 
+  async deleteTopic(topicName: string) {
+    const topic = this.pubsub.topic(topicName)
+    const [isExisted] = await topic.exists()
+    if (!isExisted) {
+      throw new Error(`Topic ${topicName} does not exist`)
+    }
+    await topic.delete()
+  }
+
   async createSubscription(
     topic: Topic,
     subscriptionId: string,
@@ -25,5 +34,14 @@ export class PubSubService {
     }
     const [subscription] = await subscriber.create(options)
     return subscription
+  }
+
+  async deleteSubscription(subscriptionId: string) {
+    const subscriber = this.pubsub.subscription(subscriptionId)
+    const [isExisted] = await subscriber.exists()
+    if (!isExisted) {
+      throw new Error(`Subscription ${subscriptionId} does not exist`)
+    }
+    await subscriber.delete()
   }
 }

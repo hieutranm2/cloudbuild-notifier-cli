@@ -25,6 +25,22 @@ export class IAMService {
     }
   }
 
+  async deleteServiceAccount(projectId: string, serviceAccountId: string) {
+    const authClient = await this.getAuthClient()
+    try {
+      await this.client.projects.serviceAccounts.delete({
+        name: `projects/${projectId}/serviceAccounts/${serviceAccountId}@${projectId}.iam.gserviceaccount.com`,
+        auth: authClient as any,
+      })
+    } catch (error) {
+      const errData = error?.response?.data?.error || {}
+      if (errData.status === 'NOT_FOUND') {
+        return
+      }
+      throw error
+    }
+  }
+
   async getAuthClient() {
     const auth = new Auth.GoogleAuth({
       scopes: ['https://www.googleapis.com/auth/iam'],
