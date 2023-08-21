@@ -17,11 +17,11 @@ const template = [
     fields: [
       {
         type: 'mrkdwn',
-        text: "*Commit:*\n<https://github.com/{{ githubUserName }}/{{ '{{.Build.Substitutions.REPO_NAME}}' | safe }}/commit/{{ '{{.Build.Substitutions.COMMIT_SHA}}' | safe }}|{{ '{{.Build.Substitutions.SHORT_SHA}}' | safe }}>",
+        text: "*Branch:*\n{{ '{{.Build.Substitutions.BRANCH_NAME}}' | safe }}",
       },
       {
         type: 'mrkdwn',
-        text: "*Branch:*\n{{ '{{.Build.Substitutions.BRANCH_NAME}}' | safe }}",
+        text: "*Commit:*\n<https://github.com/{{ githubUserName }}/{{ '{{.Build.Substitutions.REPO_NAME}}' | safe }}/commit/{{ '{{.Build.Substitutions.COMMIT_SHA}}' | safe }}|{{ '{{.Build.Substitutions.SHORT_SHA}}' | safe }}>",
       },
     ],
   },
