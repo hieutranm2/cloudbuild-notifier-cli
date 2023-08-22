@@ -8,7 +8,7 @@ const template = [
       },
       {
         type: 'mrkdwn',
-        text: "*Trigger:*\n{{ '{{.Build.Substitutions.TRIGGER_NAME}}' | safe }}",
+        text: "*Action:*\n{{ '{{.Build.Substitutions.TRIGGER_NAME}}' | safe }}",
       },
     ],
   },
