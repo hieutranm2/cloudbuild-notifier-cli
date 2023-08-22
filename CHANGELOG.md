@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/TMH-SE/cloudbuild-notifier-cli/compare/v1.0.0...v1.1.0) (2023-08-22)
+
+
+### Features
+
+* update notification message template ([3445c41](https://github.com/TMH-SE/cloudbuild-notifier-cli/commits/3445c418e137cdd65e09921c6199fc2fcf7c0bf0))
+
 ## 1.0.0 (2023-08-21)
 
 
