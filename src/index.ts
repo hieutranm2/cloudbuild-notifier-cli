@@ -13,7 +13,7 @@ program
     '-v, --version',
     'show the current version'
   )
-  .description('An CLI to set up Slack Notifier for Cloud Build result')
+  .description('The CLI to set up Slack Notifier for Cloud Build result')
   .allowExcessArguments(false)
 
 // Load all commands to program
