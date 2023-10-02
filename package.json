@@ -1,9 +1,16 @@
 {
   "name": "cloudbuild-notifier",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A CLI helps set up Cloud Build notification to Slack",
   "author": "Hieu Tran",
   "license": "ISC",
+  "keywords": [
+    "GCP",
+    "Google Cloud Build",
+    "cloudbuild",
+    "slack notifier",
+    "Configure Slack notifications"
+  ],
   "main": "./dist/bin/index.js",
   "bin": {
     "cloudbuild-notifier": "./dist/bin/index.js"
