@@ -2,6 +2,8 @@
 
 A command-line tool that simplifies the setup of Cloud Build notifications to Slack.
 
+[![npm version](https://badge.fury.io/js/cloudbuild-notifier.svg)](https://badge.fury.io/js/cloudbuild-notifier)
+
 ## Installation
 
 You can install `cloudbuild-notifier` globally using npm:
@@ -81,6 +83,11 @@ Options:
   - Security Admin
   - Service Usage Admin
   - Storage Admin
+
+
+## Notification Template
+
+![Notification template](static/notification.png)
 
 ## Troubleshooting
 
