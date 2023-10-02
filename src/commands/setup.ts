@@ -24,7 +24,7 @@ import notifierMessageTmpl from '../template/notifier-message'
 type SetupCommandOpts = {
   projectId: string
   slackWebhookUrl: string
-  githubUserName: string
+  githubAccount: string
   name: string
   region: string
   serviceAccountKey: string
@@ -38,7 +38,7 @@ const command = new Command('setup')
   .description('Set up the notifier')
   .option('-p, --projectId <project_id>', 'The id of your GCP project')
   .option('-wu, --slack-webhook-url <url>', 'The Slack Incoming Webhook url to post messages')
-  .option('-gu, --github-user-name <name>', 'The name of the user to use for git')
+  .option('-ga, --github-account <account>', 'The Github Account of your repository')
   .option('-n, --name <name>', 'The name of notifier', 'cloud-build-notifier')
   .option('-r, --region <region>', 'The region to deploy the notifier to', 'us-east1')
   .option(
@@ -78,7 +78,7 @@ const command = new Command('setup')
 const validateOptions = async (opts: SetupCommandOpts) => {
   logger.info('Validating command options...')
   const definedOpts = command.options
-  const { githubUserName, projectId, slackWebhookUrl } = opts
+  const { githubAccount, projectId, slackWebhookUrl } = opts
   if (!projectId) {
     const flags = definedOpts.find((opt) => opt.long === '--project')?.flags
     logger.error(`required option "${flags}" not specified`)
@@ -91,13 +91,8 @@ const validateOptions = async (opts: SetupCommandOpts) => {
     logger.error('Slack webhook url is invalid')
   }
 
-  if (!githubUserName) {
-    const flags = definedOpts.find((opt) => opt.long === '--github-user-name')?.flags
-    logger.error(`required option "${flags}" not specified`)
-  }
-
-  if (!githubUserName) {
-    const flags = definedOpts.find((opt) => opt.long === '--github-user-name')?.flags
+  if (!githubAccount) {
+    const flags = definedOpts.find((opt) => opt.long === '--github-account')?.flags
     logger.error(`required option "${flags}" not specified`)
   }
 
@@ -156,16 +151,16 @@ const serializeCommandOptions = async (opts: SetupCommandOpts) => {
     })
     opts.name = notifierName
 
-    const githubUserName = await input({
-      message: 'Enter your GitHub user name/organization name:',
+    const githubAccount = await input({
+      message: 'Enter your GitHub Account:',
       validate(value) {
         if (!value) {
-          return 'Please enter your GitHub user name/organization name'
+          return 'Please enter your GitHub Account'
         }
         return true
       },
     })
-    opts.githubUserName = githubUserName
+    opts.githubAccount = githubAccount
 
     const slackWebhookUrl = await input({
       message: 'Enter your Slack Incoming Webhook url:',
@@ -271,7 +266,7 @@ const storeSlackWebhookUrl = async (opts: SetupCommandOpts) => {
 
 const uploadNotifierConfig = async (opts: SetupCommandOpts) => {
   try {
-    const { projectId, serviceAccountKey, githubUserName, name, secretName, projectNumber } = opts
+    const { projectId, serviceAccountKey, githubAccount, name, secretName, projectNumber } = opts
     const storageService = new CloudStorageService(
       new Storage({
         projectId,
@@ -293,7 +288,7 @@ const uploadNotifierConfig = async (opts: SetupCommandOpts) => {
     logger.info('Uploading notification template...')
     const templateFileName = name + '-template.json'
     const renderedTemplate = nunjucks.renderString(JSON.stringify(notifierMessageTmpl, null, 2), {
-      githubUserName,
+      githubAccount,
     })
     const templateUri = await storageService.uploadFile(
       bucket!,

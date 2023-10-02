@@ -8,7 +8,7 @@ const template = [
       },
       {
         type: 'mrkdwn',
-        text: "*Action:*\n{{ '{{.Build.Substitutions.TRIGGER_NAME}}' | safe }}",
+        text: "*Trigger:*\n{{ '{{.Build.Substitutions.TRIGGER_NAME}}' | safe }}",
       },
     ],
   },
@@ -17,11 +17,11 @@ const template = [
     fields: [
       {
         type: 'mrkdwn',
-        text: "*Branch:*\n{{ '{{.Build.Substitutions.BRANCH_NAME}}' | safe }}",
+        text: "*Branch:*\n<https://github.com/{{ githubAccount }}/{{ '{{.Build.Substitutions.REPO_NAME}}' | safe }}/tree/{{ '{{.Build.Substitutions.BRANCH_NAME}}' | safe }}|{{ '{{.Build.Substitutions.BRANCH_NAME}}' | safe }}>",
       },
       {
         type: 'mrkdwn',
-        text: "*Commit:*\n<https://github.com/{{ githubUserName }}/{{ '{{.Build.Substitutions.REPO_NAME}}' | safe }}/commit/{{ '{{.Build.Substitutions.COMMIT_SHA}}' | safe }}|{{ '{{.Build.Substitutions.SHORT_SHA}}' | safe }}>",
+        text: "*Commit:*\n<https://github.com/{{ githubAccount }}/{{ '{{.Build.Substitutions.REPO_NAME}}' | safe }}/commit/{{ '{{.Build.Substitutions.COMMIT_SHA}}' | safe }}|{{ '{{.Build.Substitutions.SHORT_SHA}}' | safe }}>",
       },
     ],
   },
