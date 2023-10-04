@@ -4,6 +4,19 @@ A command-line tool that simplifies the setup of Cloud Build notifications to Sl
 
 [![npm version](https://badge.fury.io/js/cloudbuild-notifier.svg)](https://badge.fury.io/js/cloudbuild-notifier)
 
+## Requirements
+
+- Node.js (npm) installed on your machine
+- Ensure you have set up Application Default Credentials (ADC) in advance. Your Google Cloud account
+  must have **Owner** role or have at least the following roles:
+  - Browser
+  - Cloud Run Admin
+  - Pub/Sub Admin
+  - Secret Manager Admin
+  - Security Admin
+  - Service Usage Admin
+  - Storage Admin
+
 ## Installation
 
 You can install `cloudbuild-notifier` globally using npm:
@@ -45,15 +58,15 @@ Usage: cloudbuild-notifier setup [options]
 Set up the notifier
 
 Options:
-  -p, --projectId <project_id>    The id of your GCP project
-  -wu, --slack-webhook-url <url>  The Slack Incoming Webhook url to post messages
-  -gu, --github-user-name <name>  The name of the user to use for git
-  -n, --name <name>               The name of notifier (default: "cloud-build-notifier")
-  -r, --region <region>           The region to deploy the notifier to (default: "us-east1")
-  --service-account-key <path>    The path to your GCP service account key file
-  -img, --notifier-image <image>  The Docker image to use for the notifier (default: "us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/slack:latest")
-  --non-interactive               Run in non-interactive mode
-  -h, --help                      display help for command
+  -p, --projectId <project_id>     The id of your GCP project
+  -wu, --slack-webhook-url <url>   The Slack Incoming Webhook url to post messages
+  -ga, --github-account <account>  The Github Account of your repository
+  -n, --name <name>                The name of notifier (default: "cloud-build-notifier")
+  -r, --region <region>            The region to deploy the notifier to (default: "us-east1")
+  --service-account-key <path>     The path to your GCP service account key file
+  -img, --notifier-image <image>   The Docker image to use for the notifier (default: "us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/slack:latest")
+  --non-interactive                Run in non-interactive mode
+  -h, --help                       display help for command
 ```
 
 2. **Cleanup command**
@@ -70,20 +83,6 @@ Options:
   --service-account-key <path>  The path to your GCP service account key file
   -h, --help                    display help for command
 ```
-
-## Requirements
-
-- Node.js (npm) installed on your machine
-- Ensure you have set up Application Default Credentials (ADC) in advance. Your Google Cloud account
-  must have **Owner** role or have at least the following roles:
-  - Browser
-  - Cloud Run Admin
-  - Pub/Sub Admin
-  - Secret Manager Admin
-  - Security Admin
-  - Service Usage Admin
-  - Storage Admin
-
 
 ## Notification Template
 

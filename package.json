@@ -11,6 +11,10 @@
     "slack notifier",
     "Configure Slack notifications"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TMH-SE/cloudbuild-notifier-cli.git"
+  },
   "main": "./dist/bin/index.js",
   "bin": {
     "cloudbuild-notifier": "./dist/bin/index.js"
