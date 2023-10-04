@@ -7,7 +7,7 @@ export default defineConfig({
   sourcemap: false,
   minify: true,
   clean: true,
-  splitting: false,
+  splitting: true,
   target: 'es6',
   outDir: 'dist',
 })
