@@ -86,7 +86,7 @@ Options:
 
 ## Notification Template
 
-![Notification template](static/notification.png)
+![Notification template](https://res.cloudinary.com/dqgfiyj5b/image/upload/v1696434110/notification_brtzhl.png)
 
 ## Troubleshooting
 
