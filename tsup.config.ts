@@ -4,10 +4,10 @@ export default defineConfig({
   entry: ['src/**/*.ts'],
   format: ['cjs'],
   dts: false,
-  sourcemap: true,
+  sourcemap: false,
   minify: true,
   clean: true,
-  splitting: true,
+  splitting: false,
   target: 'es6',
   outDir: 'dist',
 })
