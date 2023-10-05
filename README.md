@@ -2,7 +2,7 @@
 
 A command-line tool that simplifies the setup of Cloud Build notifications to Slack.
 
-[![npm version](https://badge.fury.io/js/cloudbuild-notifier.svg)](https://badge.fury.io/js/cloudbuild-notifier)
+[![NPM Version](https://img.shields.io/npm/v/cloudbuild-notifier.svg?style=flat)]()
 
 ## Requirements
 
@@ -92,3 +92,7 @@ Options:
 
 If you encounter any issues while using cloudbuild-notifier, please contact me via
 [this link](https://www.mihi.dev/contact)
+
+## License
+
+This project is licensed under the [ISC License](LICENSE).
